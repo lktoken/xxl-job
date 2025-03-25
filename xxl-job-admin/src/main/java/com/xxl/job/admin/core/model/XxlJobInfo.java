@@ -13,7 +13,8 @@ public class XxlJobInfo {
 	
 	private int jobGroup;		// 执行器主键ID
 	private String jobDesc;
-	
+	private String jobCode;
+
 	private Date addTime;
 	private Date updateTime;
 	
@@ -65,6 +66,14 @@ public class XxlJobInfo {
 
 	public void setJobDesc(String jobDesc) {
 		this.jobDesc = jobDesc;
+	}
+
+	public String getJobCode() {
+		return jobCode;
+	}
+
+	public void setJobCode(String jobCode) {
+		this.jobCode = jobCode;
 	}
 
 	public Date getAddTime() {

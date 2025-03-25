@@ -1,20 +1,12 @@
 package com.xxl.job.admin.controller;
 
 import com.xxl.job.admin.controller.interceptor.PermissionInterceptor;
-import com.xxl.job.admin.core.exception.XxlJobException;
-import com.xxl.job.admin.core.model.XxlJobGroup;
 import com.xxl.job.admin.core.model.XxlJobInfo;
 import com.xxl.job.admin.core.model.XxlJobUser;
-import com.xxl.job.admin.core.route.ExecutorRouteStrategyEnum;
-import com.xxl.job.admin.core.scheduler.MisfireStrategyEnum;
-import com.xxl.job.admin.core.scheduler.ScheduleTypeEnum;
 import com.xxl.job.admin.core.thread.JobScheduleHelper;
 import com.xxl.job.admin.core.util.I18nUtil;
-import com.xxl.job.admin.dao.XxlJobGroupDao;
 import com.xxl.job.admin.service.XxlJobService;
 import com.xxl.job.core.biz.model.ReturnT;
-import com.xxl.job.core.enums.ExecutorBlockStrategyEnum;
-import com.xxl.job.core.glue.GlueTypeEnum;
 import com.xxl.job.core.util.DateUtil;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
@@ -27,7 +19,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
 
 /**
  * index controller
@@ -35,39 +30,19 @@ import java.util.*;
  * @author xuxueli 2015-12-19 16:13:16
  */
 @Controller
-@RequestMapping("/jobinfo")
-public class JobInfoController {
-    private static Logger logger = LoggerFactory.getLogger(JobInfoController.class);
+@RequestMapping("/jobinfo/code")
+public class JobInfoCodeController {
+    private static Logger logger = LoggerFactory.getLogger(JobInfoCodeController.class);
 
     @Resource
-    private XxlJobGroupDao xxlJobGroupDao;
+    private JobInfoController jobInfoController;
     @Resource
     private XxlJobService xxlJobService;
 
     @RequestMapping
     public String index(HttpServletRequest request, Model model,
         @RequestParam(value = "jobGroup", required = false, defaultValue = "-1") int jobGroup) {
-
-        // 枚举-字典
-        model.addAttribute("ExecutorRouteStrategyEnum", ExecutorRouteStrategyEnum.values());        // 路由策略-列表
-        model.addAttribute("GlueTypeEnum", GlueTypeEnum.values());                                // Glue类型-字典
-        model.addAttribute("ExecutorBlockStrategyEnum", ExecutorBlockStrategyEnum.values());        // 阻塞处理策略-字典
-        model.addAttribute("ScheduleTypeEnum", ScheduleTypeEnum.values());                        // 调度类型
-        model.addAttribute("MisfireStrategyEnum", MisfireStrategyEnum.values());                    // 调度过期策略
-
-        // 执行器列表
-        List<XxlJobGroup> jobGroupList_all = xxlJobGroupDao.findAll();
-
-        // filter group
-        List<XxlJobGroup> jobGroupList = PermissionInterceptor.filterJobGroupByRole(request, jobGroupList_all);
-        if (jobGroupList == null || jobGroupList.size() == 0) {
-            throw new XxlJobException(I18nUtil.getString("jobgroup_empty"));
-        }
-
-        model.addAttribute("JobGroupList", jobGroupList);
-        model.addAttribute("jobGroup", jobGroup);
-
-        return "jobinfo/jobinfo.index";
+        return jobInfoController.index(request, model, jobGroup);
     }
 
     @RequestMapping("/pageList")
@@ -86,48 +61,55 @@ public class JobInfoController {
     @ResponseBody
     @Transactional
     public ReturnT<String> add(HttpServletRequest request, XxlJobInfo jobInfo) {
-        // valid permission
-        PermissionInterceptor.validJobGroupPermission(request, jobInfo.getJobGroup());
-
-        // opt
-        XxlJobUser loginUser = PermissionInterceptor.getLoginUser(request);
-        return xxlJobService.add(jobInfo, loginUser);
+        return jobInfoController.add(request, jobInfo);
     }
 
     @RequestMapping("/update")
     @ResponseBody
     public ReturnT<String> update(HttpServletRequest request, XxlJobInfo jobInfo) {
-        // valid permission
-        PermissionInterceptor.validJobGroupPermission(request, jobInfo.getJobGroup());
-
-        // opt
-        XxlJobUser loginUser = PermissionInterceptor.getLoginUser(request);
-        return xxlJobService.update(jobInfo, loginUser);
+        return jobInfoController.update(request, jobInfo);
     }
 
     @RequestMapping("/remove")
     @ResponseBody
-    public ReturnT<String> remove(@RequestParam("id") int id) {
-        return xxlJobService.remove(id);
+    public ReturnT<String> remove(@RequestParam("jobCode") String jobCode) {
+        XxlJobInfo xxlJobInfo = xxlJobService.loadByCode(jobCode);
+        if (xxlJobInfo == null) {
+            return new ReturnT<String>(ReturnT.FAIL.getCode(), I18nUtil.getString("jobinfo_glue_jobid_unvalid"));
+        }
+        return xxlJobService.remove(xxlJobInfo.getId());
     }
 
     @RequestMapping("/stop")
     @ResponseBody
-    public ReturnT<String> pause(@RequestParam("id") int id) {
-        return xxlJobService.stop(id);
+    public ReturnT<String> pause(@RequestParam("jobCode") String jobCode) {
+        XxlJobInfo xxlJobInfo = xxlJobService.loadByCode(jobCode);
+        if (xxlJobInfo == null) {
+            return new ReturnT<String>(ReturnT.FAIL.getCode(), I18nUtil.getString("jobinfo_glue_jobid_unvalid"));
+        }
+        return xxlJobService.stop(xxlJobInfo.getId());
     }
 
     @RequestMapping("/start")
     @ResponseBody
-    public ReturnT<String> start(@RequestParam("id") int id) {
+    public ReturnT<String> start(@RequestParam("jobCode") String jobCode) {
+        XxlJobInfo xxlJobInfo = xxlJobService.loadByCode(jobCode);
+        if (xxlJobInfo == null) {
+            return new ReturnT<String>(ReturnT.FAIL.getCode(), I18nUtil.getString("jobinfo_glue_jobid_unvalid"));
+        }
+        int id = xxlJobInfo.getId();
         return xxlJobService.start(id);
     }
 
     @RequestMapping("/trigger")
     @ResponseBody
-    public ReturnT<String> triggerJob(HttpServletRequest request, @RequestParam("id") int id,
+    public ReturnT<String> triggerJob(HttpServletRequest request, @RequestParam("jobCode") String jobCode,
         @RequestParam("executorParam") String executorParam, @RequestParam("addressList") String addressList) {
-
+        XxlJobInfo xxlJobInfo = xxlJobService.loadByCode(jobCode);
+        if (xxlJobInfo == null) {
+            return new ReturnT<String>(ReturnT.FAIL.getCode(), I18nUtil.getString("jobinfo_glue_jobid_unvalid"));
+        }
+        int id = xxlJobInfo.getId();
         // login user
         XxlJobUser loginUser = PermissionInterceptor.getLoginUser(request);
         // trigger

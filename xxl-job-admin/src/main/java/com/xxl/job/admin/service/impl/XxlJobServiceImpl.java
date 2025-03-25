@@ -21,6 +21,7 @@ import com.xxl.job.core.util.DateUtil;
 import jakarta.annotation.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.text.MessageFormat;
@@ -44,9 +45,27 @@ public class XxlJobServiceImpl implements XxlJobService {
 	private XxlJobLogGlueDao xxlJobLogGlueDao;
 	@Resource
 	private XxlJobLogReportDao xxlJobLogReportDao;
-	
+    @Autowired
+    private XxlJobService xxlJobService;
+
 	@Override
-	public Map<String, Object> pageList(int start, int length, int jobGroup, int triggerStatus, String jobDesc, String executorHandler, String author) {
+	public Map<String, Object> pageList(int start, int length, int jobGroup, int triggerStatus, String jobDesc, String executorHandler, String author, String jobCode) {
+		if (jobCode != null) {
+			XxlJobInfo xxlJobInfo = xxlJobInfoDao.loadByCode(jobCode);
+			if (xxlJobInfo != null) {
+				Map<String, Object> maps = new HashMap<String, Object>();
+				maps.put("recordsTotal", 1);        // 总记录数
+				maps.put("recordsFiltered", 1);    // 过滤后的总记录数
+				maps.put("data", Collections.singleton(xxlJobInfo));                    // 分页列表
+				return maps;
+			} else {
+				Map<String, Object> maps = new HashMap<String, Object>();
+				maps.put("recordsTotal", 0);        // 总记录数
+				maps.put("recordsFiltered", 0);    // 过滤后的总记录数
+				maps.put("data", Collections.emptyList());                    // 分页列表
+				return maps;
+			}
+		}
 
 		// page list
 		List<XxlJobInfo> list = xxlJobInfoDao.pageList(start, length, jobGroup, triggerStatus, jobDesc, executorHandler, author);
@@ -74,7 +93,12 @@ public class XxlJobServiceImpl implements XxlJobService {
 		if (jobInfo.getAuthor()==null || jobInfo.getAuthor().trim().length()==0) {
 			return new ReturnT<String>(ReturnT.FAIL_CODE, (I18nUtil.getString("system_please_input")+I18nUtil.getString("jobinfo_field_author")) );
 		}
-
+		if(jobInfo.getJobCode() != null && !jobInfo.getJobCode().isBlank()) {
+			// validate code unique
+			if (xxlJobInfoDao.loadByCode(jobInfo.getJobCode()) != null) {
+				return new ReturnT<String>(ReturnT.FAIL_CODE, ("jobCode"+I18nUtil.getString("system_unvalid")) );
+			}
+		}
 		// valid trigger
 		ScheduleTypeEnum scheduleTypeEnum = ScheduleTypeEnum.match(jobInfo.getScheduleType(), null);
 		if (scheduleTypeEnum == null) {
@@ -261,8 +285,13 @@ public class XxlJobServiceImpl implements XxlJobService {
 		}
 
 		// stage job info
-		XxlJobInfo exists_jobInfo = xxlJobInfoDao.loadById(jobInfo.getId());
-		if (exists_jobInfo == null) {
+		XxlJobInfo exists_jobInfo = null;
+		if (jobInfo.getId() > 0) {
+        	exists_jobInfo = xxlJobInfoDao.loadById(jobInfo.getId());
+		} else if(jobInfo.getJobCode() != null) {
+			exists_jobInfo = xxlJobInfoDao.loadByCode(jobInfo.getJobCode());
+		}
+        if (exists_jobInfo == null) {
 			return new ReturnT<String>(ReturnT.FAIL_CODE, (I18nUtil.getString("jobinfo_field_id")+I18nUtil.getString("system_not_found")) );
 		}
 
@@ -492,6 +521,11 @@ public class XxlJobServiceImpl implements XxlJobService {
 		result.put("triggerCountFailTotal", triggerCountFailTotal);
 
 		return new ReturnT<Map<String, Object>>(result);
+	}
+
+	@Override
+	public XxlJobInfo loadByCode(String code) {
+		return xxlJobInfoDao.loadByCode(code);
 	}
 
 }

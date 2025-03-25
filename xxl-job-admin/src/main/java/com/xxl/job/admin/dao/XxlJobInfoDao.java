@@ -28,13 +28,13 @@ public interface XxlJobInfoDao {
 							 @Param("jobDesc") String jobDesc,
 							 @Param("executorHandler") String executorHandler,
 							 @Param("author") String author);
-	
+
 	public int save(XxlJobInfo info);
 
 	public XxlJobInfo loadById(@Param("id") int id);
-	
+
 	public int update(XxlJobInfo xxlJobInfo);
-	
+
 	public int delete(@Param("id") long id);
 
 	public List<XxlJobInfo> getJobsByGroup(@Param("jobGroup") int jobGroup);
@@ -62,4 +62,5 @@ public interface XxlJobInfoDao {
 	public int scheduleUpdate(XxlJobInfo xxlJobInfo);
 
 
+    XxlJobInfo loadByCode(@Param("jobCode") String jobCode);
 }
